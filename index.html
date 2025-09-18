@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Car Trip Cost Calculator</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    :root{--bg:#f6f7fb;--card:#ffffff;--accent:#3b82f6;--muted:#6b7280;--glass:rgba(59,130,246,0.08)}
+    *{box-sizing:border-box}
+    body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin:0; background:linear-gradient(180deg,var(--bg),#eef2ff); color:#0f172a;}
+    .wrap{max-width:900px;margin:40px auto;padding:20px}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+    header h1{font-size:20px;margin:0}
+    .grid{display:grid;grid-template-columns:1fr 320px;gap:18px}
+    @media (max-width:880px){.grid{grid-template-columns:1fr}}
+    .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+    .form-row{display:flex;gap:12px;align-items:end;margin-bottom:12px}
+    .form-row .field{flex:1}
+    label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+    input[type=number], input[type=text]{width:100%;padding:10px 12px;border:1px solid #e6e9ef;border-radius:8px;font-size:15px}
+    input[type=number]:focus, input[type=text]:focus{outline:2px solid var(--glass);border-color:var(--accent)}
+    .results{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    .result{padding:12px;border-radius:10px;background:linear-gradient(180deg,#ffffff,#fbfdff);border:1px solid #eef2ff}
+    .result .label{font-size:13px;color:var(--muted)}
+    .result .value{font-weight:600;font-size:18px;margin-top:6px}
+    .big-value{font-size:28px}
+    .split-bar{height:14px;background:#f1f5f9;border-radius:999px;overflow:hidden;border:1px solid #eef2ff;margin-top:10px}
+    .split-electric{height:100%;background:linear-gradient(90deg,#60a5fa,#3b82f6)}
+    .split-gas{height:100%;background:linear-gradient(90deg,#f97316,#fb923c)}
+    .muted-note{font-size:13px;color:var(--muted);margin-top:10px}
+    footer{margin-top:14px;font-size:13px;color:var(--muted)}
+    #map{height:300px;margin-top:12px;border-radius:12px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header><h1>Car Trip Cost Calculator</h1></header>
+    <div class="grid">
+      <section class="card">
+        <h2>Inputs</h2>
+        <div class="form-row">
+          <div class="field"><label for="depart">Departure location</label><input id="depart" type="text" placeholder="e.g. Berlin"></div>
+          <div class="field"><label for="destination">Destination location</label><input id="destination" type="text" placeholder="e.g. Munich"></div>
+        </div>
+        <div id="map"></div>
+        <div class="form-row">
+          <div class="field"><label for="tripDistance">Trip distance (km)</label><input id="tripDistance" type="number" min="0" step="any" value="200"></div>
+          <div class="field"><label for="electricDistance">Electric distance (km)</label><input id="electricDistance" type="number" min="0" step="any" value="80"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="fuelConsumption">Fuel consumption (L / 100 km)</label><input id="fuelConsumption" type="number" min="0" step="any" value="6.5"></div>
+          <div class="field"><label for="electricConsumption">Electric consumption (km / kWh)</label><input id="electricConsumption" type="number" min="0.1" step="any" value="4.2"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="gasPrice">Gasoline price (€/L)</label><input id="gasPrice" type="number" min="0" step="any" value="1.8"></div>
+          <div class="field"><label for="elecPrice">Electricity price (€/kWh)</label><input id="elecPrice" type="number" min="0" step="any" value="0.45"></div>
+        </div>
+        <button id="calcRoute">Calculate Route</button>
+        <div id="warn" class="danger"></div>
+      </section>
+      <aside class="card">
+        <h2>Results</h2>
+        <div class="results">
+          <div class="result"><div class="label">Total trip cost</div><div id="totalCost" class="value big-value">€0.00</div></div>
+          <div class="result"><div class="label">Cost of electricity</div><div id="costElec" class="value">€0.00</div></div>
+          <div class="result"><div class="label">Cost of gasoline</div><div id="costGas" class="value">€0.00</div></div>
+          <div class="result"><div class="label">Liters of gasoline used</div><div id="litersGas" class="value">0.00 L</div></div>
+          <div class="result"><div class="label">kWh of electricity used</div><div id="kwhElec" class="value">0.00 kWh</div></div>
+          <div class="result"><div class="label">Electric / Gas split</div><div class="value"><span id="pctElec">0%</span> / <span id="pctGas">0%</span></div></div>
+        </div>
+        <div class="split-bar"><div id="splitFill" class="split-electric"></div></div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const $ = id => document.getElementById(id);
+    const inputs = ['tripDistance','electricDistance','fuelConsumption','electricConsumption','gasPrice','elecPrice'].map($);
+    const [tripDistance, electricDistance, fuelConsumption, electricConsumption, gasPrice, elecPrice] = inputs;
+    const totalCost = $('totalCost');
+    const costElec = $('costElec');
+    const costGas = $('costGas');
+    const litersGas = $('litersGas');
+    const kwhElec = $('kwhElec');
+    const pctElec = $('pctElec');
+    const pctGas = $('pctGas');
+    const splitFill = $('splitFill');
+    const warn = $('warn');
+
+    function parseNumber(el){ const v = parseFloat(el.value); return Number.isFinite(v) ? v : 0; }
+    function fmt(v, currency=false){ return currency ? '€'+v.toFixed(2) : v.toFixed(2); }
+
+    function calculate(){
+      let d = parseNumber(tripDistance);
+      let dElec = parseNumber(electricDistance);
+      const fuelLper100 = parseNumber(fuelConsumption);
+      const kmPerKwh = parseNumber(electricConsumption)||0.000001;
+      const priceGas = parseNumber(gasPrice);
+      const priceElec = parseNumber(elecPrice);
+
+      if(dElec > d){ warn.style.display='block'; warn.textContent='Electric distance exceeds trip distance — clamped.'; dElec=d; } else { warn.style.display='none'; }
+      if(d<=0){ updateDisplay(0,0,0,0,0,0); return; }
+
+      const dGas = Math.max(0,d-dElec);
+      const liters = (dGas*fuelLper100)/100;
+      const kwh = dElec/kmPerKwh;
+      const cost_gas = liters*priceGas;
+      const cost_elec = kwh*priceElec;
+      const total = cost_gas+cost_elec;
+      const pct_elec = (dElec/d)*100;
+      updateDisplay(total,cost_elec,cost_gas,liters,kwh,pct_elec);
+    }
+
+    function updateDisplay(total,cost_e,cost_g,liters,kwh,pct_elec){
+      totalCost.textContent = fmt(total,true);
+      costElec.textContent = fmt(cost_e,true);
+      costGas.textContent = fmt(cost_g,true);
+      litersGas.textContent = fmt(liters)+' L';
+      kwhElec.textContent = fmt(kwh)+' kWh';
+      const pctE = Number.isFinite(pct_elec)?pct_elec:0;
+      const pctG = 100-pctE;
+      pctElec.textContent=pctE.toFixed(1)+'%';
+      pctGas.textContent=pctG.toFixed(1)+'%';
+      splitFill.style.width=Math.max(0,Math.min(100,pctE))+'%';
+    }
+
+    inputs.forEach(inp=>inp.addEventListener('input',calculate));
+    calculate();
+
+    const map = L.map('map').setView([51.1657,10.4515],5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+    let routeLayer;
+
+    document.getElementById('calcRoute').addEventListener('click', async()=>{
+      const depart = $('depart').value.trim();
+      const destination = $('destination').value.trim();
+      if(!depart||!destination){ alert('Enter both departure and destination'); return; }
+      const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImRkZjFhMmRiZGI1NjQ1Yjg4NDUwNmQ4ZjkzMDYxNjFmIiwiaCI6Im11cm11cjY0In0=';
+      try{
+        const geocode = async(place)=>{
+          const res=await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${ORS_API_KEY}&text=${encodeURIComponent(place)}`);
+          const data=await res.json();
+          if(data.features&&data.features.length>0) return data.features[0].geometry.coordinates;
+          throw new Error('Location not found: '+place);
+        };
+
+        const [coordDepart, coordDest] = await Promise.all([geocode(depart), geocode(destination)]);
+        const body = { coordinates: [coordDepart, coordDest] };
+
+        const resRoute = await fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
+          method: 'POST',
+          headers: {
+            'Authorization': ORS_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+        const json = await resRoute.json();
+
+        if(routeLayer) map.removeLayer(routeLayer);
+
+        if(json.features && json.features.length > 0){
+          const route = json.features[0];
+          const km = route.properties.summary.distance / 1000;
+          tripDistance.value = km.toFixed(1);
+          calculate();
+
+          const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+          routeLayer = L.polyline(coords, {color:'#3b82f6', weight:5}).addTo(map);
+          map.fitBounds(routeLayer.getBounds());
+        } else {
+          alert('No route found.');
+        }
+      }catch(err){
+        console.error(err);
+        alert('Error: '+err.message);
+      }
+    });
+  </script>
+</body>
+</html>

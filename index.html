@@ -43,8 +43,6 @@
           <div class="field"><label for="depart">Departure location</label><input id="depart" type="text" placeholder="e.g. Berlin"></div>
           <div class="field"><label for="destination">Destination location</label><input id="destination" type="text" placeholder="e.g. Munich"></div>
         </div>
-        <button id="calcRoute">Calculate Route</button>
-                <div id="map"></div>
         <div class="form-row">
           <div class="field"><label for="tripDistance">Trip distance (km)</label><input id="tripDistance" type="number" min="0" step="any" value="0"></div>
           <div class="field"><label for="electricDistance">Electric distance (km)</label><input id="electricDistance" type="number" min="0" step="any" value="0"></div>
@@ -56,8 +54,9 @@
         <div class="form-row">
           <div class="field"><label for="gasPrice">Gasoline price (€/L)</label><input id="gasPrice" type="number" min="0" step="any" value="1.8"></div>
           <div class="field"><label for="elecPrice">Electricity price (€/kWh)</label><input id="elecPrice" type="number" min="0" step="any" value="0.45"></div>
-
         </div>
+        <button id="calcRoute">Calculate Route</button>
+        <div id="map"></div>
         <div id="warn" class="danger"></div>
       </section>
       <aside class="card">

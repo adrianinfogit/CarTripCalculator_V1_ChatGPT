@@ -31,6 +31,9 @@
     .muted-note{font-size:13px;color:var(--muted);margin-top:10px}
     footer{margin-top:14px;font-size:13px;color:var(--muted)}
     #map{height:300px;margin-top:12px;border-radius:12px;}
+    .btn{margin-top:12px;padding:10px 14px;border:none;border-radius:8px;font-size:14px;cursor:pointer;color:white;}
+    #calcRoute{background:#3b82f6;}
+    #googleMapsBtn{background:#34A853;}
   </style>
 </head>
 <body>
@@ -55,7 +58,8 @@
           <div class="field"><label for="gasPrice">Gasoline price (€/L)</label><input id="gasPrice" type="number" min="0" step="any" value="1.8"></div>
           <div class="field"><label for="elecPrice">Electricity price (€/kWh)</label><input id="elecPrice" type="number" min="0" step="any" value="0.45"></div>
         </div>
-        <button id="calcRoute">Calculate Route</button>
+        <button id="calcRoute" class="btn">Calculate Route</button>
+        <button id="googleMapsBtn" class="btn">Open in Google Maps</button>
         <div id="map"></div>
         <div id="warn" class="danger"></div>
       </section>
@@ -177,6 +181,14 @@
         console.error(err);
         alert('Error: '+err.message);
       }
+    });
+
+    document.getElementById('googleMapsBtn').addEventListener('click', ()=>{
+      const depart = encodeURIComponent($('depart').value.trim());
+      const destination = encodeURIComponent($('destination').value.trim());
+      if(!depart || !destination){ alert('Enter both departure and destination'); return; }
+      const url = `https://www.google.com/maps/dir/?api=1&origin=${depart}&destination=${destination}`;
+      window.open(url, '_blank');
     });
   </script>
 </body>
